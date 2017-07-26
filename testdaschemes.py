@@ -46,10 +46,13 @@ Mpfac = spsla.splu(MP)
 vp_stokes = lau.solve_sadpnt_smw(amat=stokesmatsc['A'], jmat=J, jmatT=-J.T,
                                  rhsv=fv, rhsp=fp)
 
-getconvvec = hlp.getconvvecfun(femp)
+getconvvec = hlp.getconvvecfun(**femp)
 vfile = 'results/vels'
 pfile = 'results/pres'
 plotit = hlp.getparaplotroutine(femp=femp, vfile=vfile, pfile=pfile)
+plotit(vp_stokes, t=0)
+plotit(vp_stokes, t=1)
+import ipdb; ipdb.set_trace()
 
 
 def getdatastr(t=None):

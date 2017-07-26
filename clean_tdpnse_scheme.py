@@ -3,7 +3,7 @@ import scipy.sparse as sps
 import scipy.sparse.linalg as spsla
 
 
-def halfexp_euler_nseind2(M=None, MP=None, A=None, BT=None, B=None,
+def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
                           fv=None, fp=None, ppin=None,
                           getconvfv=None,
                           Nts=100, t0=0., tE=1., numoutputpts=100,
@@ -23,13 +23,13 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, BT=None, B=None,
     #
     # Basic Eqn:
     #
-    # | 1/dt*M  -B.T |   | q+|     | 1/dt*M*qc - K(qc) + fc |
+    # | 1/dt*M  -J.T |   | q+|     | 1/dt*M*qc - K(qc) + fc |
     # |              | * |   |  =  |                        |
-    # |    B         |   | pc|     | g                      |
+    # |    J         |   | pc|     | g                      |
     #
     #
 
-    dt = (t0 - tE)/Nts
+    dt = (tE - t0)/Nts
     Nv = A.shape[0]
 
     tcur = t0
@@ -56,10 +56,10 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, BT=None, B=None,
     # v, p = expand_vp_dolfunc(PrP, vp=vp_init, vc=None, pc=None)
     # TsP.UpFiles.u_file << v, tcur
     # TsP.UpFiles.p_file << p, tcur
-    B, BT, MP, fp, vp_init, Npc = pinthep(B, BT, MP, fp, vp_init, ppin)
+    J, JT, MP, fp, vp_init, Npc = pinthep(J, JT, MP, fp, vp_init, ppin)
 
-    IterAv = MFac*sps.hstack([1.0/dt*M + A, PFacI*(-1)*BT])
-    IterAp = CFac*sps.hstack([B, sps.csr_matrix((Npc, Npc))])
+    IterAv = MFac*sps.hstack([1.0/dt*M + A, PFacI*(-1)*JT])
+    IterAp = CFac*sps.hstack([J, sps.csr_matrix((Npc, Npc))])
     IterA = sps.vstack([IterAv, IterAp])
     if linatol == 0:
         IterAfac = spsla.factorized(IterA)
@@ -109,18 +109,18 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, BT=None, B=None,
     # iniiterfac = TsP.iniiterfac  # the first krylov step needs more maxiter
 
     for etap in range(1, numoutputpts + 1):
-        for i in range(Nts / numoutputpts):
+        for i in range(np.int(Nts/numoutputpts)):
             cdatstr = get_datastr(t=tcur+dt)
             try:
                 vp_next = np.load(cdatstr + '.npy')
-                print 'loaded data from ', cdatstr, ' ...'
+                print('loaded data from ', cdatstr, ' ...')
                 vp_next = np.vstack([vp_next[:Nv], 1./PFacI*vp_next[Nv:]])
                 # vp_oldold = vp_old
                 vp_old = vp_next
                 # if tcur == dt+dt:
                 #     iniiterfac = 1  # fac only in the first Krylov Call
             except IOError:
-                print 'computing data for ', cdatstr, ' ...'
+                print('computing data for ', cdatstr, ' ...')
                 v_old = vp_old[:Nv]
                 curconfv = getconvfv(v_old)
                 # ConV = dts.get_convvec(u0_dolfun=v, V=PrP.V)
@@ -186,26 +186,27 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, BT=None, B=None,
 
             tcur += dt
 
-            TolCorL.append(TolCor)
+            # TolCorL.append(TolCor)
 
-        print '%d of %d time steps completed ' % (etap*Nts/numoutputpts, Nts)
+        print('%d of %d time steps completed ' % (etap*Nts/numoutputpts, Nts))
+        plotroutine(vp_init, t=tcur)
 
     return dictofvpstrs
 
 
-def pinthep(B, BT, M, fp, vp_init, pdof):
+def pinthep(J, JT, M, fp, vp_init, pdof):
     """remove dofs of div and grad to pin the pressure
 
     """
-    (NP, NV) = B.shape
+    (NP, NV) = J.shape
     if pdof is None:
-        return B, BT, M, fp, vp_init, NP
+        return J, JT, M, fp, vp_init, NP
     elif pdof == 0:
         vpi = np.vstack([vp_init[:NV, :], vp_init[NV+1:, :]])
-        return (B[1:, :], BT[:, 1:], M[1:, :][:, 1:], fp[1:, :],
+        return (J[1:, :], JT[:, 1:], M[1:, :][:, 1:], fp[1:, :],
                 vpi, NP - 1)
     elif pdof == -1:
-        return (B[:-1, :], BT[:, :-1], M[:-1, :][:, :-1],
+        return (J[:-1, :], JT[:, :-1], M[:-1, :][:, :-1],
                 fp[:-1, :], vp_init[:-1, :], NP - 1)
     else:
         raise NotImplementedError()
