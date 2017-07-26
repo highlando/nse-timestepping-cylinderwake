@@ -6,7 +6,7 @@ import scipy.sparse.linalg as spsla
 def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
                           fv=None, fp=None, ppin=None,
                           getconvfv=None,
-                          Nts=100, t0=0., tE=1., numoutputpts=100,
+                          Nts=1000, t0=0., tE=1., numoutputpts=100,
                           linatol=0,
                           get_datastr=None, plotroutine=None,
                           vp_init=None, **kwargs):
@@ -189,7 +189,7 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
             # TolCorL.append(TolCor)
 
         print('%d of %d time steps completed ' % (etap*Nts/numoutputpts, Nts))
-        plotroutine(vp_init, t=tcur)
+        plotroutine(vp_old, t=tcur)
 
     return dictofvpstrs
 

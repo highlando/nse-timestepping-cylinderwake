@@ -50,9 +50,6 @@ getconvvec = hlp.getconvvecfun(**femp)
 vfile = 'results/vels'
 pfile = 'results/pres'
 plotit = hlp.getparaplotroutine(femp=femp, vfile=vfile, pfile=pfile)
-plotit(vp_stokes, t=0)
-plotit(vp_stokes, t=1)
-import ipdb; ipdb.set_trace()
 
 
 def getdatastr(t=None):
