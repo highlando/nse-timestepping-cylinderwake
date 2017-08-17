@@ -43,7 +43,7 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
     CFac = 1  # /dt
     PFacI = 1.  # -1./dt
 
-    dictofvpstrs = {}
+    dictofvstrs, dictofpstrs = {}, {}
 
     cdatstr = get_datastr(t=t0)
 
@@ -52,8 +52,10 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
     #     print 'loaded data from ', cdatstr, ' ...'
     # except IOError:
     inivp = np.vstack([iniv, inip])
-    np.save(cdatstr, inivp)
-    dictofvpstrs.update({t0: cdatstr})
+    np.save(cdatstr + '_v', iniv)
+    np.save(cdatstr + '_p', inip)
+    dictofvstrs.update({t0: cdatstr + '_v'})
+    dictofpstrs.update({t0: cdatstr + '_p'})
 
     # print 'saving to ', cdatstr, ' ...'
 
@@ -190,10 +192,10 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
             #         print 'Elapsed time {0}'.format(tend - tstart)
             #         iniiterfac = 1  # fac only in the first Krylov Call
 
-            np.save(cdatstr, np.vstack([vp_old[:Nv],
-                                        PFacI*vp_old[Nv:]]))
-
-            dictofvpstrs.update({tcur: cdatstr})
+            np.save(cdatstr + '_v', vp_old[:Nv])
+            np.save(cdatstr + '_p', PFacI*vp_old[Nv:])
+            dictofvstrs.update({tcur: cdatstr + '_v'})
+            dictofpstrs.update({tcur: cdatstr + '_p'})
 
             # TolCorL.append(TolCor)
 
@@ -202,7 +204,7 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
             if verbose:
                 print('{0}/{1} time steps completed'.format(tk, Nts))
 
-    return dictofvpstrs
+    return dictofvstrs, dictofpstrs
 
 
 def pinthep(J, JT, M, fp, vp_init, pdof):

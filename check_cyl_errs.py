@@ -6,6 +6,7 @@ import numpy as np
 
 import dolfin_navier_scipy.stokes_navier_utils as snu
 import dolfin_navier_scipy.data_output_utils as dou
+import dolfin_navier_scipy.dolfin_to_sparrays as dts
 
 # import matlibplots.conv_plot_utils as cpu
 
@@ -76,40 +77,50 @@ plotit = hlp.getparaplotroutine(femp=coeffs['femp'], vfile=vfile, pfile=pfile)
 tsdict = dict(t0=t0, tE=tE, Nts=Nts)
 curslvdct = coeffs
 curslvdct.update(tsdict)
-vpstrdct = tis.halfexp_euler_nseind2(get_datastr=getdatastr,
-                                     plotroutine=plotit,
-                                     getconvfv=coeffs['getconvvec'],
-                                     # iniv=coeffs['iniv'], inip=coeffs['inip'],
-                                     **curslvdct)
+vstrdct, pstrdct = tis.halfexp_euler_nseind2(get_datastr=getdatastr,
+                                             plotroutine=plotit,
+                                             getconvfv=coeffs['getconvvec'],
+                                             **curslvdct)
 
 NV, NP = coeffs['J'].T.shape
 refiniv = dou.load_npa(vdref[trange[0]])
-imxiniv = dou.load_npa(vpstrdct[trange[0]])[:NV]
+imxiniv = dou.load_npa(vstrdct[trange[0]])
 
 refinip = dou.load_npa(pdref[trange[0]])
-imxinip = dou.load_npa(vpstrdct[trange[0]])[NV:]
-print('ref vs. inival: {0}'.format(np.linalg.norm(refiniv - refcoeffs['iniv'])))
+imxinip = dou.load_npa(pstrdct[trange[0]])
+print('ref vs. inival: {0}'.format(np.linalg.norm(refiniv-refcoeffs['iniv'])))
 print('imx vs. inival: {0}'.format(np.linalg.norm(imxiniv - coeffs['iniv'])))
 print('diff in inivels: {0}'.format(np.linalg.norm(refiniv - imxiniv)))
 print('diff in inipres: {0}'.format(np.linalg.norm(refinip - imxinip)))
 
-import ipdb; ipdb.set_trace()
+# import ipdb; ipdb.set_trace()
 
 # errvl = []
 # errpl = []
+
+
+def compvperror(reffemp=None, vref=None, pref=None,
+                curfemp=None, vcur=None, pcur=None):
+    vreff, preff = dts.expand_vp_dolfunc(vc=vref, pc=pref, **reffemp)
+    vcurf, pcurf = dts.expand_vp_dolfunc(vc=vcur, pc=pcur, **curfemp)
+    return dolfin.errornorm(vreff, vcurf), dolfin.errornorm(preff, pcurf)
+
+elv = []
+elp = []
+
+curttrange = trange
+for t in curttrange:
+    print(t)
+
 # rescl = []
 # for Nts in Ntslist:
 #     dtstrdct = dict(prefix=svdatapath, method=method,
 #                     Nts=Nts, tol=tol, te=tE, tolcor=tolcor)
-#     elv = []
-#     elp = []
 #     elc = []
-# 
 #     def app_pverr(tcur):
 #         cdatstr = get_dtstr(t=tcur, **dtstrdct)
 #         vp = np.load(cdatstr + '.npy')
 #         v, p = expand_vp_dolfunc(vp=vp)
-# 
 #         # vpref = np.load(cdatstrref + '.npy')
 #         # vref, pref = expand_vp_dolfunc(PrP, vp=vpref)
 #         vref = np.load(vdref[tcur] + '.npy')
@@ -124,7 +135,6 @@ import ipdb; ipdb.set_trace()
 #         # print 'p', dolfin.norm(p)
 #         # print 'p(v)', dolfin.norm(ptrial)
 #         # print 'p(vref){0}\n'.format(dolfin.norm(prtrial))
-# 
 #         elv.append(dolfin.errornorm(v, vreff))
 #         elp.append(dolfin.errornorm(p, preff))
 #         # elv.append(dolfin.norm(vdiff))
@@ -136,49 +146,44 @@ import ipdb; ipdb.set_trace()
 #         # routine from time_int_schemes seems buggy for CR or 'g not 0'
 #         # ncres = comp_cont_error(v, fpbc, PrP.Q)
 #         elc.append(ncres)
-# 
 #     trange = np.linspace(0., tE, Nts+1)
 #     samplvec = np.arange(1, len(trange), samplerate)
-# 
 #     app_pverr(0.)
-# 
 #     for t in trange[samplvec]:
 #         app_pverr(t)
-# 
 #     ev = np.array(elv)
 #     ep = np.array(elp)
 #     ec = np.array(elc)
-# 
 #     trange = np.r_[trange[0], trange[samplerate]]
 #     dtvec = trange[1:] - trange[:-1]
-# 
+#
 #     trapv = 0.5*(ev[:-1] + ev[1:])
 #     errv = (dtvec*trapv).sum()
-# 
+#
 #     trapp = 0.5*(ep[:-1] + ep[1:])
 #     errp = (dtvec*trapp).sum()
-# 
+#
 #     trapc = 0.5*(ec[:-1] + ec[1:])
 #     resc = (dtvec*trapc).sum()
-# 
+#
 #     # print 'Nts = {0}, v_error = {1}, p_error = {2}, contres={3}'.\
 #     #     format(Nts, errv, errp, resc)
-# 
+#
 #     errvl.append(errv)
 #     errpl.append(errp)
 #     rescl.append(resc)
-# 
+#
 # # print errvl
 # # print errpl
 # # print rescl
-# 
+#
 # # topgfplot = True
 # # if topgfplot:
 # #     ltpl = [errvl, errpl, rescl]
 # #     for ltp in ltpl:
 # #         for (i, Nts) in enumerate(Ntslist):
 # #             print '({0}, {1})'.format(1./Nts, ltp[i])
-# 
+#
 # cpu.conv_plot(Ntslist, [errvl], logscale=2,
 #               markerl=['o'], fignum=1, leglist=['velerror'])
 # cpu.conv_plot(Ntslist, [rescl], logscale=2,
