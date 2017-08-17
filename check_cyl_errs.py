@@ -9,7 +9,7 @@ import dolfin_navier_scipy.data_output_utils as dou
 
 # import matlibplots.conv_plot_utils as cpu
 
-import clean_tdpnse_scheme as tis
+import tdp_nse_schemes as tis
 import helpers as hlp
 
 dolfin.set_log_level(60)
