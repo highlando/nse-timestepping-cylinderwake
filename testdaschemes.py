@@ -53,7 +53,7 @@ plotit = hlp.getparaplotroutine(femp=femp, vfile=vfile, pfile=pfile)
 
 
 def getdatastr(t=None):
-    return 'data/itsjustatest{0}'.format(t)
+    return 'data/itsjustatest{0:.5f}'.format(t)
 vpstrdct = tis.halfexp_euler_nseind2(getconvfv=getconvvec,
                                      get_datastr=getdatastr,
                                      plotroutine=plotit,
