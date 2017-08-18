@@ -5,23 +5,24 @@ import numpy as np
 # from time_int_schemes import expand_vp_dolfunc, get_dtstr
 
 import dolfin_navier_scipy.stokes_navier_utils as snu
-import dolfin_navier_scipy.data_output_utils as dou
+# import dolfin_navier_scipy.data_output_utils as dou
 import dolfin_navier_scipy.dolfin_to_sparrays as dts
 
 # import matlibplots.conv_plot_utils as cpu
 
-import tdp_nse_schemes as tis
+import tdp_nse_schemes as tns
 import helpers as hlp
 
 dolfin.set_log_level(60)
 
 samplerate = 1
+plotplease = True
 
 Nref = 3
-N, Re, scheme, t0, tE = 3, 60, 'CR', 0., .01
+N, Re, scheme, t0, tE = 3, 60, 'TH', 0., .1
 # Ntslist = [2**x for x in range(6, 11)]
-Ntslist = [12]  # 2**x for x in range(5, 6)]
-Ntsref = 12
+Ntslist = [2**x for x in range(7, 10)]  # 2**x for x in range(5, 6)]
+Ntsref = 512
 tol = 2**(-16)
 tolcor = True
 method = 1
@@ -42,10 +43,13 @@ if not os.path.exists(plotspath):
 # ###
 
 
-refcoeffs = hlp.getthecoeffs(N=Nref, Re=Re)
+refcoeffs = hlp.getthecoeffs(N=Nref, Re=Re, scheme=scheme)
 
 # get the ref trajectories
 trange = np.linspace(t0, tE, Ntsref+1)
+
+parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}'.\
+    format(Re, N, Ntsref, t0, tE, scheme)
 
 snsedict = dict(A=refcoeffs['A'], J=refcoeffs['J'], JT=refcoeffs['JT'],
                 M=refcoeffs['M'], ppin=refcoeffs['ppin'], fv=refcoeffs['fv'],
@@ -54,63 +58,85 @@ snsedict = dict(A=refcoeffs['A'], J=refcoeffs['J'], JT=refcoeffs['JT'],
                 iniv=refcoeffs['iniv'], trange=trange,
                 nu=refcoeffs['femp']['nu'],
                 clearprvdata=False, paraviewoutput=True,
-                nsects=1, addfullsweep=True,
+                nsects=10, addfullsweep=True,
                 vel_pcrd_stps=1,
-                data_prfx=datapathref,
+                data_prfx=datapathref + parastr,
                 vfileprfx=plotspath+'refv_',
                 pfileprfx=plotspath+'refp_',
                 return_dictofpstrs=True, return_dictofvelstrs=True)
 
 vdref, pdref = snu.solve_nse(**snsedict)
 
-Nts = Ntslist[0]
-coeffs = hlp.getthecoeffs(N=N, Re=Re)
-parastr = 'Re{0}N{1}Nts{2}t0{3}tE{4}'.format(Re, N, Nts, t0, tE)
+
+def compvperror(reffemp=None, vref=None, pref=None,
+                curfemp=None, vcur=None, pcur=None):
+    try:
+        verf, perf = dts.expand_vp_dolfunc(vc=vref-vcur, pc=pref-pcur,
+                                           **reffemp)
+        verr = dolfin.norm(verf)
+        perr = dolfin.norm(perf)
+    except ValueError:  # obviously not the same FEM spaces
+        vreff, preff = dts.expand_vp_dolfunc(vc=vref, pc=pref, **reffemp)
+        vcurf, pcurf = dts.expand_vp_dolfunc(vc=vcur, pc=pcur, **curfemp)
+        verr = dolfin.errornorm(vreff, vcurf)
+        perr = dolfin.errornorm(preff, pcurf)
+    return verr, perr
 
 
-def getdatastr(t=None):
-    return datapath + 'imexeuler' + parastr + 't{0:.5f}'.format(t)
+coeffs = hlp.getthecoeffs(N=N, Re=Re, scheme=scheme)
 
-vfile = plotspath + 'imexeulervels'
-pfile = plotspath + 'imexeulerpres'
-plotit = hlp.getparaplotroutine(femp=coeffs['femp'], vfile=vfile, pfile=pfile)
-tsdict = dict(t0=t0, tE=tE, Nts=Nts)
-curslvdct = coeffs
-curslvdct.update(tsdict)
-vstrdct, pstrdct = tis.halfexp_euler_nseind2(get_datastr=getdatastr,
+errvl = []
+errpl = []
+
+for Nts in Ntslist:
+    parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}'.\
+        format(Re, N, Nts, t0, tE, scheme)
+
+    def getdatastr(t=None):
+        return datapath + 'imexeuler' + parastr + 't{0:.5f}'.format(t)
+
+    vfile = plotspath + 'imexeulervels'
+    pfile = plotspath + 'imexeulerpres'
+    plotit = hlp.getparaplotroutine(femp=coeffs['femp'], plotplease=plotplease,
+                                    vfile=vfile, pfile=pfile)
+    curttrange = np.linspace(t0, tE, Nts+1)
+    curslvdct = coeffs
+    curslvdct.update(trange=curttrange)
+    vdcur, pdcur = tns.halfexp_euler_nseind2(get_datastr=getdatastr,
                                              plotroutine=plotit,
                                              getconvfv=coeffs['getconvvec'],
                                              **curslvdct)
 
-NV, NP = coeffs['J'].T.shape
-refiniv = dou.load_npa(vdref[trange[0]])
-imxiniv = dou.load_npa(vstrdct[trange[0]])
+    elv = []
+    elp = []
 
-refinip = dou.load_npa(pdref[trange[0]])
-imxinip = dou.load_npa(pstrdct[trange[0]])
-print('ref vs. inival: {0}'.format(np.linalg.norm(refiniv-refcoeffs['iniv'])))
-print('imx vs. inival: {0}'.format(np.linalg.norm(imxiniv - coeffs['iniv'])))
-print('diff in inivels: {0}'.format(np.linalg.norm(refiniv - imxiniv)))
-print('diff in inipres: {0}'.format(np.linalg.norm(refinip - imxinip)))
+    for tcur in curttrange:
+        vref = np.load(vdref[tcur] + '.npy')
+        pref = np.load(pdref[tcur] + '.npy')
+        vcur = np.load(vdcur[tcur] + '.npy')
+        pcur = np.load(pdcur[tcur] + '.npy')
+        verc, perc = compvperror(reffemp=refcoeffs['femp'],
+                                 vref=vref, pref=pref, vcur=vcur, pcur=pcur)
+        elv.append(verc)
+        elp.append(perc)
 
-# import ipdb; ipdb.set_trace()
+    ev = np.array(elv)
+    ep = np.array(elp)
+    dtvec = curttrange[1:] - curttrange[:-1]
 
-# errvl = []
-# errpl = []
+    trapv = 0.5*(ev[:-1] + ev[1:])
+    errv = (dtvec*trapv).sum()
 
+    trapp = 0.5*(ep[:-1] + ep[1:])
+    errp = (dtvec*trapp).sum()
 
-def compvperror(reffemp=None, vref=None, pref=None,
-                curfemp=None, vcur=None, pcur=None):
-    vreff, preff = dts.expand_vp_dolfunc(vc=vref, pc=pref, **reffemp)
-    vcurf, pcurf = dts.expand_vp_dolfunc(vc=vcur, pc=pcur, **curfemp)
-    return dolfin.errornorm(vreff, vcurf), dolfin.errornorm(preff, pcurf)
+    errvl.append(errv)
+    errpl.append(errp)
 
-elv = []
-elp = []
-
-curttrange = trange
-for t in curttrange:
-    print(t)
+print('integrated errors: Nts: v_e ; p_e')
+for k, Nts in enumerate(Ntslist):
+    errv, errp = errvl[k], errpl[k]
+    print('{0}: {1}; {2}'.format(Nts, errv, errp))
 
 # rescl = []
 # for Nts in Ntslist:

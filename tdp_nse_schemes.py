@@ -6,7 +6,7 @@ import scipy.sparse.linalg as spsla
 def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
                           fv=None, fp=None, ppin=None,
                           getconvfv=None,
-                          Nts=1000, t0=0., tE=1.,
+                          Nts=None, t0=None, tE=None,
                           trange=None,
                           numoutputpts=10,
                           linatol=0,
@@ -33,8 +33,16 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
     #
     #
 
+    try:
+        t0, tE, Nts = trange[0], trange[-1], trange.size-1
+    except TypeError:
+        trange = np.linspace(t0, tE, Nts+1)
+
     dt = (tE - t0)/Nts
-    trange = np.linspace(t0, tE, Nts+1)
+    dtvec = trange[1:] - trange[:-1]
+    if not np.allclose(np.linalg.norm(dtvec)/np.sqrt(dtvec.size), dt):
+        raise UserWarning('trange not equispaced -- cannot prefac A')
+
     Nv = A.shape[0]
 
     tcur = t0
@@ -119,14 +127,12 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
     if verbose:
         print('IMEX Euler on [{0}, {1}]'.format(trange[0], trange[-1]))
     for tk, tcur in enumerate(trange[1:]):
-        cts = tcur - trange[tk]
-        if not np.allclose(cts, dt) and not linatol == 0:
-            raise UserWarning('trange not equispaced -- cannot prefac A')
         cdatstr = get_datastr(t=tcur)
         try:
-            vp_next = np.load(cdatstr + '.npy')
+            v_next = np.load(cdatstr + '_v.npy')
+            p_next = np.load(cdatstr + '_p.npy')
             print('loaded data from ', cdatstr, ' ...')
-            vp_next = np.vstack([vp_next[:Nv], vp_next[Nv:]])
+            vp_next = np.vstack([v_next, p_next])
             # vp_oldold = vp_old
             vp_old = vp_next
             # if tcur == dt+dt:
@@ -194,10 +200,9 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
 
             np.save(cdatstr + '_v', vp_old[:Nv])
             np.save(cdatstr + '_p', PFacI*vp_old[Nv:])
-            dictofvstrs.update({tcur: cdatstr + '_v'})
-            dictofpstrs.update({tcur: cdatstr + '_p'})
 
-            # TolCorL.append(TolCor)
+        dictofvstrs.update({tcur: cdatstr + '_v'})
+        dictofpstrs.update({tcur: cdatstr + '_p'})
 
         if np.mod(tk+1, np.int(np.floor(Nts/numoutputpts))) == 0:
             plotroutine(vp_old, t=tcur)
