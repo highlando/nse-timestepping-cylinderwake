@@ -3,6 +3,141 @@ import scipy.sparse as sps
 import scipy.sparse.linalg as spsla
 
 
+def projection2(M=None, MP=None, A=None, JT=None, J=None,
+                fv=None, fp=None, ppin=None,
+                getconvfv=None,
+                Nts=None, t0=None, tE=None,
+                trange=None,
+                numoutputpts=10,
+                linatol=0,
+                get_datastr=None, plotroutine=None,
+                verbose=True,
+                iniv=None, inip=None,
+                **kwargs):
+    """projection2 method for time integration of NSE
+
+    Basic Eqn:
+
+    (1/dt*M + A)*tv+ = 1/dt*M*vc + J.T*pc - K(qc) + fc
+    -J*M.-1*J.T*phi+ = J*tv+ - g+
+                  v+ = tv+ + M.-1*J.T*phi+
+                  p+ = pc + 0.5*dt*phi+
+
+    Parameters
+    ----------
+    numoutputpts : int, optional
+        number of points at which the computed quantities are logged
+    getconvfv : f(v), callable
+        returns the convection term to be added to the right hand side
+    """
+
+    try:
+        t0, tE, Nts = trange[0], trange[-1], trange.size-1
+    except TypeError:
+        trange = np.linspace(t0, tE, Nts+1)
+
+    dt = (tE - t0)/Nts
+    dtvec = trange[1:] - trange[:-1]
+    if not np.allclose(np.linalg.norm(dtvec)/np.sqrt(dtvec.size), dt):
+        raise UserWarning('trange not equispaced -- cannot prefac A')
+
+    Np = J.shape[0]
+
+    tcur = t0
+
+    dictofvstrs, dictofpstrs = {}, {}
+
+    cdatstr = get_datastr(t=t0)
+
+    inivp = np.vstack([iniv, inip])
+    np.save(cdatstr + '_v', iniv)
+    np.save(cdatstr + '_p', inip)
+    dictofvstrs.update({t0: cdatstr + '_v'})
+    dictofpstrs.update({t0: cdatstr + '_p'})
+
+    plotroutine(inivp, t=tcur)
+    J, JT, MP, fp, vp_init, Npc = pinthep(J, JT, MP, fp, inivp, ppin)
+
+    momeqmat = 1.0/dt*M + A
+    if linatol == 0:
+        momeqfac = spsla.factorized(momeqmat)
+
+    # TODO: go back to PPE+cg
+    projmat = sps.vstack([sps.hstack([M, -JT]),
+                          sps.hstack([J, sps.csr_matrix((Np, Np))])])
+    prjmatfac = spsla.factorized(projmat)
+
+    import krypy
+    mfac = spsla.factorized(M)
+    mpfac = spsla.factorized(MP)
+
+    def _appMinv(v):
+        MinvV = mfac(v)
+        return MinvV.reshape((v.size, 1))
+
+    def _invBMBv(v):
+        bv = JT*v
+        minbv = np.atleast_2d(mfac(bv.flatten())).T
+        return J*minbv
+
+    def _invMP(p):
+        return np.atleast_2d(mpfac(p.flatten())).T
+
+    BMpmoBT = spsla.LinearOperator((Np, Np), matvec=_invBMBv, dtype=np.float32)
+    invMP = spsla.LinearOperator((Np, Np), matvec=_invMP, dtype=np.float32)
+
+    v_old = iniv
+    p_old = inip
+
+    if verbose:
+        print('Projection2 on [{0}, {1}]'.format(trange[0], trange[-1]))
+    for tk, tcur in enumerate(trange[1:]):
+        cdatstr = get_datastr(t=tcur)
+        try:
+            v_next = np.load(cdatstr + '_v.npy')
+            p_next = np.load(cdatstr + '_p.npy')
+            print('loaded data from ', cdatstr, ' ...')
+        except IOError:
+            print('computing data for ', cdatstr, ' ...')
+            curconfv = getconvfv(v_old)
+            meqrhs = 1.0/dt*M*v_old + fv - curconfv
+
+            if linatol == 0:  # direct solve!
+                tvn = momeqfac(meqrhs.flatten())
+                tvn = np.atleast_2d(tvn).T
+                vnphn = prjmatfac(np.vstack([M*tvn, fp]))
+                v_next = vnphn[:-Np].reshape((tvn.size, 1))
+                phin = vnphn[-Np:].reshape((Np, 1))
+                p_next = p_old + 2./dt*phin
+
+            else:
+                pperhs = -J*tvn + fp
+                cls = krypy.linsys.LinearSystem(BMpmoBT, -pperhs, M=invMP)
+                phin = krypy.linsys.Cg(cls).xk
+                v_next = tvn + _appMinv(JT*phin)
+                p_next = p_old + 2./dt*phin
+
+                # TODO: go back to PPE+cg
+
+            # print('PPE+cg vs. sadpt solve; dvn: {0}; dphin {1}'.
+            #       format(np.linalg.norm(v_next-vn),
+            #              np.linalg.norm(phin-phn)))
+            v_old = v_next
+            p_old = p_next
+            np.save(cdatstr + '_v', v_old)
+            np.save(cdatstr + '_p', p_old)
+
+        dictofvstrs.update({tcur: cdatstr + '_v'})
+        dictofpstrs.update({tcur: cdatstr + '_p'})
+
+        if np.mod(tk+1, np.int(np.floor(Nts/numoutputpts))) == 0:
+            plotroutine(np.vstack([v_old, p_old]), t=tcur)
+            if verbose:
+                print('{0}/{1} time steps completed'.format(tk, Nts))
+
+    return dictofvstrs, dictofpstrs
+
+
 def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
                           fv=None, fp=None, ppin=None,
                           getconvfv=None,
@@ -27,9 +162,9 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
     #
     # Basic Eqn:
     #
-    # | 1/dt*M  -J.T |   | q+|     | 1/dt*M*qc - K(qc) + fc |
-    # |              | * |   |  =  |                        |
-    # |    J         |   | pc|     | g                      |
+    # | 1/dt*M + A  -J.T |   | q+|     | 1/dt*M*qc - K(qc) + fc |
+    # |                  | * |   |  =  |                        |
+    # |    J             |   | pc|     | g                      |
     #
     #
 

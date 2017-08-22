@@ -19,10 +19,10 @@ samplerate = 1
 plotplease = True
 
 Nref = 3
-N, Re, scheme, t0, tE = 3, 60, 'TH', 0., .1
+N, Re, scheme, t0, tE = 3, 60, 'TH', 0., 1.
 # Ntslist = [2**x for x in range(6, 11)]
-Ntslist = [2**x for x in range(7, 10)]  # 2**x for x in range(5, 6)]
-Ntsref = 512
+Ntslist = [2**x for x in range(9, 11)]  # 2**x for x in range(5, 6)]
+Ntsref = 2048
 tol = 2**(-16)
 tolcor = True
 method = 1
@@ -49,7 +49,7 @@ refcoeffs = hlp.getthecoeffs(N=Nref, Re=Re, scheme=scheme)
 trange = np.linspace(t0, tE, Ntsref+1)
 
 parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}'.\
-    format(Re, N, Ntsref, t0, tE, scheme)
+    format(Re, Nref, Ntsref, t0, tE, scheme)
 
 snsedict = dict(A=refcoeffs['A'], J=refcoeffs['J'], JT=refcoeffs['JT'],
                 M=refcoeffs['M'], ppin=refcoeffs['ppin'], fv=refcoeffs['fv'],
@@ -72,9 +72,13 @@ def compvperror(reffemp=None, vref=None, pref=None,
                 curfemp=None, vcur=None, pcur=None):
     try:
         verf, perf = dts.expand_vp_dolfunc(vc=vref-vcur, pc=pref-pcur,
-                                           **reffemp)
+                                           zerodiribcs=True, **reffemp)
         verr = dolfin.norm(verf)
         perr = dolfin.norm(perf)
+        # vreff, preff = dts.expand_vp_dolfunc(vc=vref, pc=pref, **reffemp)
+        # vcurf, pcurf = dts.expand_vp_dolfunc(vc=vcur, pc=pcur, **curfemp)
+        # verr = dolfin.norm(vreff - vcurf)
+        # perr = dolfin.norm(preff - pcurf)
     except ValueError:  # obviously not the same FEM spaces
         vreff, preff = dts.expand_vp_dolfunc(vc=vref, pc=pref, **reffemp)
         vcurf, pcurf = dts.expand_vp_dolfunc(vc=vcur, pc=pcur, **curfemp)
@@ -88,24 +92,35 @@ coeffs = hlp.getthecoeffs(N=N, Re=Re, scheme=scheme)
 errvl = []
 errpl = []
 
+methdict = {'imexeuler': tns.halfexp_euler_nseind2,
+            'projectn2': tns.projection2}
+
+curmethnm = 'projectn2'
+curmethod = methdict[curmethnm]
 for Nts in Ntslist:
     parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}'.\
         format(Re, N, Nts, t0, tE, scheme)
 
     def getdatastr(t=None):
-        return datapath + 'imexeuler' + parastr + 't{0:.5f}'.format(t)
+        return datapath + curmethnm + parastr + 't{0:.5f}'.format(t)
 
-    vfile = plotspath + 'imexeulervels'
-    pfile = plotspath + 'imexeulerpres'
+    vfile = plotspath + curmethnm + 'vels'
+    pfile = plotspath + curmethnm + 'pres'
     plotit = hlp.getparaplotroutine(femp=coeffs['femp'], plotplease=plotplease,
                                     vfile=vfile, pfile=pfile)
     curttrange = np.linspace(t0, tE, Nts+1)
     curslvdct = coeffs
-    curslvdct.update(trange=curttrange)
-    vdcur, pdcur = tns.halfexp_euler_nseind2(get_datastr=getdatastr,
-                                             plotroutine=plotit,
-                                             getconvfv=coeffs['getconvvec'],
-                                             **curslvdct)
+    curslvdct.update(trange=curttrange, get_datastr=getdatastr,
+                     plotroutine=plotit, numoutputpts=100,
+                     getconvfv=coeffs['getconvvec'])
+
+    vdcur, pdcur = curmethod(**curslvdct)
+    trangeidx = [0, np.int(np.floor(Nts/2)), -1]
+    for trix in trangeidx:
+        rsv = np.load(vdref[curttrange[trix]] + '.npy')
+        csv = np.load(vdcur[curttrange[trix]] + '.npy')
+        print('ref vs. curv at t={0}: {1}'.
+              format(curttrange[trix], np.linalg.norm(rsv-csv)))
 
     elv = []
     elp = []
@@ -116,6 +131,7 @@ for Nts in Ntslist:
         vcur = np.load(vdcur[tcur] + '.npy')
         pcur = np.load(pdcur[tcur] + '.npy')
         verc, perc = compvperror(reffemp=refcoeffs['femp'],
+                                 curfemp=coeffs['femp'],
                                  vref=vref, pref=pref, vcur=vcur, pcur=pcur)
         elv.append(verc)
         elp.append(perc)
