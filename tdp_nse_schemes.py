@@ -63,7 +63,7 @@ def projection2(M=None, MP=None, A=None, JT=None, J=None,
         momeqfac = spsla.factorized(momeqmat)
 
     # TODO: go back to PPE+cg
-    projmat = sps.vstack([sps.hstack([M, -JT]),
+    projmat = sps.vstack([sps.hstack([2./dt*M, -2./dt*JT]),
                           sps.hstack([J, sps.csr_matrix((Np, Np))])])
     prjmatfac = spsla.factorized(projmat)
 
@@ -105,10 +105,10 @@ def projection2(M=None, MP=None, A=None, JT=None, J=None,
             if linatol == 0:  # direct solve!
                 tvn = momeqfac(meqrhs.flatten())
                 tvn = np.atleast_2d(tvn).T
-                vnphn = prjmatfac(np.vstack([M*tvn, fp]))
+                vnphn = prjmatfac(np.vstack([2./dt*M*tvn, fp]))
                 v_next = vnphn[:-Np].reshape((tvn.size, 1))
                 phin = vnphn[-Np:].reshape((Np, 1))
-                p_next = p_old + 2./dt*phin
+                p_next = p_old + phin
 
             else:
                 pperhs = -J*tvn + fp

@@ -1,4 +1,5 @@
 import os
+import glob
 
 # import dolfin
 import numpy as np
@@ -16,7 +17,9 @@ N, Re, scheme = 3, 60, 'TH'
 # Ntslist = [2**x for x in range(6, 11)]
 t0, tE, Nts = 0., 2., 2048
 trange = np.linspace(t0, tE, Nts)
+curmethnm = 'imexeuler'
 curmethnm = 'projectn2'
+cleardata = True
 plotplease = True
 
 methdict = {'imexeuler': tns.halfexp_euler_nseind2,
@@ -49,6 +52,11 @@ parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}'.\
 def getdatastr(t=None):
     return 'data/testit_' + curmethnm + parastr + 't{0:.5f}'.format(t)
 
+if cleardata:
+    cdatstr = 'data/testit_' + curmethnm + parastr + '*'
+    for fname in glob.glob(cdatstr):
+        os.remove(fname)
+
 curslvdct = coeffs
 curslvdct.update(trange=trange, get_datastr=getdatastr,
                  plotroutine=plotit, numoutputpts=100,
@@ -62,7 +70,7 @@ vdc, pdc = curmethod(**curslvdct)
 #                                      vp_init=vp_stokes, **stokesmatsc)
 
 # import ipdb; ipdb.set_trace()
-# 
+#
 # # get the ref trajectories
 # trange = np.linspace(0., tE, Ntsref+1)
 # M, A = stokesmatsc['M'], stokesmatsc['A']
@@ -70,7 +78,7 @@ vdc, pdc = curmethod(**curslvdct)
 # invinds = femp['invinds']
 # fv, fp = rhsd_stbc['fv'], rhsd_stbc['fp']
 # ppin = None
-# 
+#
 # snsedict = dict(A=A, J=J, JT=JT, M=M, ppin=ppin, fv=fv, fp=fp,
 #                 V=femp['V'], Q=femp['Q'],
 #                 invinds=invinds, diribcs=femp['diribcs'],
@@ -79,5 +87,5 @@ vdc, pdc = curmethod(**curslvdct)
 #                 data_prfx='refveldata/',
 #                 vfileprfx='refveldata/v', pfileprfx='refveldata/p',
 #                 return_dictofpstrs=True, return_dictofvelstrs=True)
-# 
+#
 # vdref, pdref = snu.solve_nse(**snsedict)
