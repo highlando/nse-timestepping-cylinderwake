@@ -18,8 +18,8 @@ dolfin.set_log_level(60)
 samplerate = 1
 plotplease = True
 
-Nref = 3
-N, Re, scheme, t0, tE = 3, 60, 'TH', 0., 1.
+Nref = 2
+N, Re, scheme, t0, tE = 2, 60, 'TH', 0., 1.
 # Ntslist = [2**x for x in range(6, 11)]
 Ntslist = [2**x for x in range(9, 12)]  # 2**x for x in range(5, 6)]
 Ntsref = 2048
@@ -92,14 +92,21 @@ errvl = []
 errpl = []
 
 methdict = {'imexeuler': tns.halfexp_euler_nseind2,
-            'projectn2': tns.projection2}
+            'projectn2': tns.projection2,
+            'SIMPLE': tns.SIMPLE}
 
+curmethnm = 'SIMPLE'
 curmethnm = 'projectn2'
 curmethnm = 'imexeuler'
+
+linatol = 1e-6
+
 curmethod = methdict[curmethnm]
 for Nts in Ntslist:
-    parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}'.\
-        format(Re, N, Nts, t0, tE, scheme)
+    parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}linatol{6:.2e}'.\
+        format(Re, N, Nts, t0, tE, scheme, linatol)
+    # parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}'.\
+    #     format(Re, N, Nts, t0, tE, scheme)
 
     def getdatastr(t=None):
         return datapath + curmethnm + parastr + 't{0:.5f}'.format(t)
@@ -112,6 +119,7 @@ for Nts in Ntslist:
     curslvdct = coeffs
     curslvdct.update(trange=curttrange, get_datastr=getdatastr,
                      plotroutine=plotit, numoutputpts=100,
+                     linatol=linatol,
                      getconvfv=coeffs['getconvvec'])
 
     vdcur, pdcur = curmethod(**curslvdct)

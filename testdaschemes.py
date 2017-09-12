@@ -13,17 +13,20 @@ import numpy as np
 import tdp_nse_schemes as tns
 import helpers as hlp
 
-N, Re, scheme = 3, 60, 'TH'
+N, Re, scheme = 2, 60, 'TH'
 # Ntslist = [2**x for x in range(6, 11)]
 t0, tE, Nts = 0., 2., 2048
+linatol = 1e-4
 trange = np.linspace(t0, tE, Nts)
-curmethnm = 'imexeuler'
 curmethnm = 'projectn2'
+curmethnm = 'imexeuler'
+curmethnm = 'SIMPLE'
 cleardata = True
 plotplease = True
 
 methdict = {'imexeuler': tns.halfexp_euler_nseind2,
-            'projectn2': tns.projection2}
+            'projectn2': tns.projection2,
+            'SIMPLE': tns.SIMPLE}
 curmethod = methdict[curmethnm]
 
 svdatapathref = 'data/'
@@ -45,12 +48,13 @@ pfile = 'plots/justatest_' + curmethnm + 'pres'
 plotit = hlp.getparaplotroutine(femp=coeffs['femp'], plotplease=plotplease,
                                 vfile=vfile, pfile=pfile)
 
-parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}'.\
-    format(Re, N, Nts, t0, tE, scheme)
+parastr = 'Re{0}N{1}scheme{5}Nts{2}t0{3}tE{4}linatol{6:.2e}'.\
+    format(Re, N, Nts, t0, tE, scheme, linatol)
 
 
 def getdatastr(t=None):
-    return 'data/testit_' + curmethnm + parastr + 't{0:.5f}'.format(t)
+    return 'data/testit_' + curmethnm + parastr +\
+        'linatol{0:.2e}'.format(linatol) + 't{0:.5f}'.format(t)
 
 if cleardata:
     cdatstr = 'data/testit_' + curmethnm + parastr + '*'
@@ -59,7 +63,7 @@ if cleardata:
 
 curslvdct = coeffs
 curslvdct.update(trange=trange, get_datastr=getdatastr,
-                 plotroutine=plotit, numoutputpts=100,
+                 plotroutine=plotit, numoutputpts=100, linatol=linatol,
                  getconvfv=coeffs['getconvvec'])
 
 vdc, pdc = curmethod(**curslvdct)
