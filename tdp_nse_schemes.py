@@ -84,6 +84,9 @@ def SIMPLE(M=None, MP=None, A=None, JT=None, J=None,
 
     v_old = iniv
     p_old = inip
+    # momeqresl = [0]
+    # dpnresl = [0]
+    # vpnresl = [0]
 
     if verbose:
         print('SIMPLE on [{0}, {1}]'.format(trange[0], trange[-1]))
@@ -95,6 +98,10 @@ def SIMPLE(M=None, MP=None, A=None, JT=None, J=None,
             loadorcomped = 'loaded'
             if verbose:
                 print('loaded data from ', cdatstr, ' ...')
+            # if retresdls:
+            #     curconfv = getconvfv(v_old)
+            #     meqrhs = 1.0/dt*M*v_old + fv - curconfv + J.T*p_old
+
         except IOError:
             loadorcomped = 'computed'
             if verbose:
@@ -112,12 +119,19 @@ def SIMPLE(M=None, MP=None, A=None, JT=None, J=None,
                 # print('res(vn,pn): {0}'.format(0)
 
             else:
-                mls = krypy.linsys.LinearSystem(momeqmat, meqrhs, M=invM)
-                tvn = krypy.linsys.Cg(mls, tol=.5*linatol).xk
-                pperhs = J*tvn - fp
-                pls = krypy.linsys.LinearSystem(BMmqpmoBT, pperhs, M=invMP)
-                dpn = krypy.linsys.Cg(pls, tol=.5*linatol).xk
-                v_next = tvn + momeqfac(JT*dpn)
+                mls = krypy.linsys.LinearSystem(momeqmat, meqrhs, M=invM,
+                                                self_adjoint=True)
+                tvn = krypy.linsys.Cg(mls, tol=linatol).xk
+
+                pperhs = -J*tvn + fp
+                pls = krypy.linsys.LinearSystem(BMmqpmoBT, pperhs, M=invMP,
+                                                self_adjoint=True)
+                dpn = krypy.linsys.Cg(pls, tol=linatol).xk
+                dvls = krypy.linsys.LinearSystem(momeqmat, JT*dpn, M=invM,
+                                                 self_adjoint=True)
+                dvn = krypy.linsys.Cg(dvls, tol=linatol).xk
+                # v_next = tvn + momeqfac(JT*dpn)
+                v_next = tvn + dvn
                 p_next = p_old + dpn
 
             v_old = v_next
@@ -309,9 +323,9 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
 
     tcur = t0
 
-    MFac = dt
+    MFac = 1.  # dt
     CFac = -1.  # /dt
-    PFacI = 1./dt  # -1./dt
+    PFacI = 1./MFac  # -1./dt
 
     dictofvstrs, dictofpstrs = {}, {}
 
@@ -338,6 +352,7 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
     IterAv = MFac*sps.hstack([1.0/dt*M + A, PFacI*(-1)*JT])
     IterAp = CFac*sps.hstack([J, sps.csr_matrix((Npc, Npc))])
     IterA = sps.vstack([IterAv, IterAp])
+
     vp_old = vp_init
 
     if linatol == 0:
@@ -422,8 +437,9 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
                     # TolCor = 0
                     inikryupd = False  # only once !!
                 else:
-                    curls = krypy.linsys.LinearSystem(IterA, Iterrhs,
-                                                      M=MInv)
+                    curls = krypy.linsys.\
+                        LinearSystem(IterA, Iterrhs, M=MInv,
+                                     self_adjoint=True)
 
                     # tstart = time.time()
 
@@ -431,7 +447,7 @@ def halfexp_euler_nseind2(M=None, MP=None, A=None, JT=None, J=None,
                     upv = (vp_old - vp_oldold)
 
                     ret = krypy.linsys.\
-                        Minres(curls, x0=vp_old + 0*upv, tol=linatol,
+                        Minres(curls, tol=linatol,  x0=vp_old + 0*upv,
                                store_arnoldi=False, maxiter=1500)
                     # RestartedGmres(curls, x0=vp_old + upv,
                     #                tol=linatol,

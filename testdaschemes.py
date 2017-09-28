@@ -15,8 +15,9 @@ import helpers as hlp
 
 N, Re, scheme = 2, 60, 'TH'
 # Ntslist = [2**x for x in range(6, 11)]
-t0, tE, Nts = 0., 2., 2048
+t0, tE, Nts = 0., 1., 1024  # 2048
 linatol = 1e-4
+linatol = 0  # 1e-4
 trange = np.linspace(t0, tE, Nts)
 curmethnm = 'projectn2'
 curmethnm = 'imexeuler'
